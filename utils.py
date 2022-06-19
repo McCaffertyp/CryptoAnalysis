@@ -45,3 +45,7 @@ def adjust_hours_and_format_datetime(date_str: str, hours_adjust: int):
         second = "0{0}".format(second)
 
     return "{0}-{1}-{2}T{3}:{4}:{5}".format(year, month, day, hour, minute, second)
+
+
+def log(tag: str, message):
+    print("{0} [LOG]/{1}: {2}".format(datetime.now(), tag, message))

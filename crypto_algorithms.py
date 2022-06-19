@@ -1,6 +1,6 @@
 from enum import Enum
 from bisect import bisect_left
-from utils import adjust_hours_and_format_datetime
+from utils import adjust_hours_and_format_datetime, log
 
 RELATIVE_MARGINS_RIGHT = {
     "LUNC": 0.000001,
@@ -14,18 +14,19 @@ USED_RECENT_COUNT = 200
 
 def run_predictions(coin_abbreviation: str, coin_prices: list, predict_future_hours: int, most_recent_time):
     print("Working on creating predictions for the next {0} hour(s)".format(predict_future_hours))
-    hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
+    hour_prediction = predict_next_hour_weights_method(coin_abbreviation, coin_prices)
+    hour_prediction_pattern = predict_next_hour_pattern_method(coin_prices)
     print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction))
+    print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction_pattern))
     for i in range(1, predict_future_hours):
         coin_prices.append(hour_prediction)
-        hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
+        hour_prediction = predict_next_hour_weights_method(coin_abbreviation, coin_prices)
         adjusted_hour = adjust_hours_and_format_datetime(most_recent_time, i + 1)
         print("Datetime {0} prediction: {1:.8f}".format(adjusted_hour, hour_prediction))
 
 
-def predict_next_hour(coin_abbreviation: str, coin_prices: list) -> float:
-    print("Working on creating prediction for new hour")
-    relative_margin_right = RELATIVE_MARGINS_RIGHT.get(coin_abbreviation)
+def predict_next_hour_weights_method(coin_abbreviation: str, coin_prices: list) -> float:
+    log("predict_next_hour_weights_method", "Working on creating prediction for new hour")
     cp_decimal_weights = {
         DecimalCategory.PL_FIVE: 0, DecimalCategory.PL_FOUR: 0, DecimalCategory.PL_THREE: 0,
         DecimalCategory.PL_TWO: 0, DecimalCategory.PL_ONE: 0, DecimalCategory.NL_FIVE: 0,
@@ -51,7 +52,7 @@ def predict_next_hour(coin_abbreviation: str, coin_prices: list) -> float:
         cp_diff_category = get_cp_diff_category(cp_diff)
         cp_diff_category_value = cp_decimal_weights.get(cp_diff_category)
         cp_decimal_weights[cp_diff_category] = cp_diff_category_value + 1
-        cp_fluctuation = weight_fluctuation(cp_diff_category)
+        cp_fluctuation = get_diff_fluctuation(cp_diff_category)
         # cp_fluctuation_value = cp_fluctuation_weights.get(cp_fluctuation)
         # cp_fluctuation_weights[cp_fluctuation] = cp_fluctuation_value + 1
         cp_dict = {
@@ -66,11 +67,6 @@ def predict_next_hour(coin_abbreviation: str, coin_prices: list) -> float:
     # print(cp_fluctuation_weights)
 
     most_recent_price = coin_prices[-1]
-    most_recent_price_weight_prediction = {
-        "CP Difference Category": DecimalCategory.UNKNOWN,
-        "CP Difference": 0.0,
-        "CP Fluctuation": CPFluctuation.UNKNOWN
-    }
     # print(most_recent_price)
 
     nearest_weights = get_nearest_weights(most_recent_price, coin_price_weights)
@@ -112,6 +108,70 @@ def predict_next_hour(coin_abbreviation: str, coin_prices: list) -> float:
     # print("{0:.8f}".format(price_prediction))
 
     return price_prediction
+
+
+def predict_next_hour_pattern_method(coin_prices: list) -> float:
+    log("predict_next_hour_pattern_method", "Working on creating prediction for new hour")
+    cps_fluctuation = []
+    for i in range(len(coin_prices) - 1):
+        cp_now = coin_prices[i]
+        cp_next = coin_prices[i + 1]
+        cp_diff = cp_now - cp_next
+        cp_diff_category = get_cp_diff_category(cp_diff)
+        cps_fluctuation.append({"CP Difference": cp_diff, "CP Fluctuation": get_diff_fluctuation(cp_diff_category)})
+
+    print(cps_fluctuation)
+
+    global USED_RECENT_COUNT
+    if WANTED_RECENT_COUNT > len(cps_fluctuation):
+        USED_RECENT_COUNT = len(cps_fluctuation)
+
+    current_increase_run = 0
+    longest_increase_run = 0
+    current_decrease_run = 0
+    longest_decrease_run = 0
+    current_same_run = 0
+    longest_same_run = 0
+
+    for i in range(USED_RECENT_COUNT):
+        cp_dict = cps_fluctuation[i]
+        cp_diff = cp_dict.get("CP Difference")
+        cp_fluctuation = cp_dict.get("CP Fluctuation")
+
+        if cp_fluctuation is CPFluctuation.INCREASE:
+            current_increase_run += 1
+            if current_decrease_run > longest_decrease_run:
+                longest_decrease_run = current_decrease_run
+                current_decrease_run = 0
+            if current_same_run > longest_same_run:
+                longest_same_run = current_same_run
+                current_same_run = 0
+
+        elif cp_fluctuation is CPFluctuation.DECREASE:
+            current_decrease_run += 1
+            if current_increase_run > longest_increase_run:
+                longest_increase_run = current_increase_run
+                current_increase_run = 0
+            if current_same_run > longest_same_run:
+                longest_same_run = current_same_run
+                current_same_run = 0
+
+        elif cp_fluctuation is CPFluctuation.SAME:
+            current_same_run += 1
+            if current_increase_run > longest_increase_run:
+                longest_increase_run = current_increase_run
+                current_increase_run = 0
+            if current_decrease_run > longest_decrease_run:
+                longest_decrease_run = current_decrease_run
+                current_decrease_run = 0
+
+    # TODO Create a dict tracking each run and how many times each run occurs
+    # TODO Based on current run, based on the groupings of the previous fluctuations, determine best run
+    # TODO Based on the best run selection, choose increase, decrease or same
+    # TODO Based on the fluctuation option, use the methodology applied in predict_next_hour_weight_method
+    # TODO Using the above methodology, get the nearest and recent groups to determine best value to apply for the fluctuation option
+
+    return 0.0
 
 
 def get_cp_diff_category(number: float):
@@ -279,7 +339,7 @@ def get_recent_weights(coin_price_weights: dict) -> list:
     return recent_weights
 
 
-def weight_fluctuation(cp_diff_category):
+def get_diff_fluctuation(cp_diff_category):
     cp_category_identifier = cp_diff_category.value[0]
     if cp_category_identifier == "p":
         return CPFluctuation.INCREASE
