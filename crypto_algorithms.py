@@ -1,14 +1,30 @@
 from enum import Enum
 from bisect import bisect_left
+from utils import adjust_hours_and_format_datetime
 
 RELATIVE_MARGINS_RIGHT = {
-    "LUNC": 0.000001
+    "LUNC": 0.000001,
+    "FET": 0.01
 }
-VALUE_GROUP_COUNT = 100
+WANTED_GROUP_COUNT = 100
+USED_GROUP_COUNT = 100
+WANTED_RECENT_COUNT = 200
+USED_RECENT_COUNT = 200
 
 
-def predict_next_hour(coin_abbreviation: str, coin_prices: list):
-    print("Working on creating prediction for next hour")
+def run_predictions(coin_abbreviation: str, coin_prices: list, predict_future_hours: int, most_recent_time):
+    print("Working on creating predictions for the next {0} hour(s)".format(predict_future_hours))
+    hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
+    print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction))
+    for i in range(1, predict_future_hours):
+        coin_prices.append(hour_prediction)
+        hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
+        adjusted_hour = adjust_hours_and_format_datetime(most_recent_time, i + 1)
+        print("Datetime {0} prediction: {1:.8f}".format(adjusted_hour, hour_prediction))
+
+
+def predict_next_hour(coin_abbreviation: str, coin_prices: list) -> float:
+    print("Working on creating prediction for new hour")
     relative_margin_right = RELATIVE_MARGINS_RIGHT.get(coin_abbreviation)
     cp_decimal_weights = {
         DecimalCategory.PL_FIVE: 0, DecimalCategory.PL_FOUR: 0, DecimalCategory.PL_THREE: 0,
@@ -22,6 +38,9 @@ def predict_next_hour(coin_abbreviation: str, coin_prices: list):
         DecimalCategory.NR_FIVE: 0, DecimalCategory.NR_SIX: 0, DecimalCategory.NR_SEVEN: 0,
         DecimalCategory.NR_EIGHT: 0, DecimalCategory.NR_NINE: 0
     }
+    cp_fluctuation_weights = {
+        CPFluctuation.INCREASE: 0, CPFluctuation.DECREASE: 0, CPFluctuation.SAME: 0, CPFluctuation.UNKNOWN: 0
+    }
 
     coin_price_weights = dict()
 
@@ -32,50 +51,89 @@ def predict_next_hour(coin_abbreviation: str, coin_prices: list):
         cp_diff_category = get_cp_diff_category(cp_diff)
         cp_diff_category_value = cp_decimal_weights.get(cp_diff_category)
         cp_decimal_weights[cp_diff_category] = cp_diff_category_value + 1
-        coin_price_weights[cp_now] = {"CP Difference Category": cp_diff_category, "CP Difference": cp_diff}
+        cp_fluctuation = weight_fluctuation(cp_diff_category)
+        # cp_fluctuation_value = cp_fluctuation_weights.get(cp_fluctuation)
+        # cp_fluctuation_weights[cp_fluctuation] = cp_fluctuation_value + 1
+        cp_dict = {
+            "CP Difference Category": cp_diff_category,
+            "CP Difference": cp_diff,
+            "CP Fluctuation": cp_fluctuation
+        }
+        coin_price_weights[cp_now] = cp_dict
 
-    print(cp_decimal_weights)
-    print(coin_price_weights)
+    # print(cp_decimal_weights)
+    # print(coin_price_weights)
+    # print(cp_fluctuation_weights)
 
     most_recent_price = coin_prices[-1]
-    most_recent_price_weight_prediction = {"CP Difference Category": DecimalCategory.UNKNOWN, "CP Difference": 0.0}
+    most_recent_price_weight_prediction = {
+        "CP Difference Category": DecimalCategory.UNKNOWN,
+        "CP Difference": 0.0,
+        "CP Fluctuation": CPFluctuation.UNKNOWN
+    }
     # print(most_recent_price)
 
-    cp_fluctuation_weights = {
-        CPFluctuation.INCREASE: 0, CPFluctuation.DECREASE: 0, CPFluctuation.SAME: 0, CPFluctuation.UNKNOWN: 0
-    }
-
     nearest_weights = get_nearest_weights(most_recent_price, coin_price_weights)
-    print(nearest_weights)
+    # print(nearest_weights)
+    recent_weights = get_recent_weights(coin_price_weights)
+    # print(recent_weights)
 
-    for weight in nearest_weights:
-        # weight_fluctuation(coin_weight: dict) can return "increase," "decrease," "same" or "unknown."
-        coin_fluctuation = weight_fluctuation(weight)
-        cp_fluctuation_value = cp_fluctuation_weights.get(coin_fluctuation)
-        cp_fluctuation_weights[coin_fluctuation] = cp_fluctuation_value + 1
+    nearest_and_recent_weights = nearest_weights + recent_weights
+    for weight in nearest_and_recent_weights:
+        # print("weight: {0}".format(weight))
+        cp_fluctuation = weight["CP Fluctuation"]
+        cp_fluctuation_value = cp_fluctuation_weights.get(cp_fluctuation)
+        cp_fluctuation_weights[cp_fluctuation] = cp_fluctuation_value + 1
 
-    print(cp_fluctuation_weights)
+    highest_cp_fluctuation = get_highest_cp_fluctuation(cp_fluctuation_weights)
+
+    nearest_weights_difference_values = get_nearest_weights_difference_values(
+        nearest_weights,
+        highest_cp_fluctuation
+    )
+    # print(nearest_weights_difference_values)
+
+    recent_weights_difference_values = get_recent_weights_difference_values(
+        nearest_weights,
+        highest_cp_fluctuation
+    )
+    # print(recent_weights_difference_values)
+
+    price_prediction = get_price_prediction(
+        most_recent_price,
+        nearest_weights_difference_values,
+        recent_weights_difference_values,
+        len(nearest_weights_difference_values)
+    )
+
+    # print(most_recent_price)
+    # print(price_prediction)
+    # print("{0:.8f}".format(most_recent_price))
+    # print("{0:.8f}".format(price_prediction))
+
+    return price_prediction
 
 
 def get_cp_diff_category(number: float):
-    str_num = str(number)
-    if number > 0.0:
-        if number > 10000.0:
+    abs_num = abs(number)
+    if abs_num >= 1.0:
+        if abs_num > 10000.0:
             decimal_count = 5
-        elif number > 1000.0:
+        elif abs_num > 1000.0:
             decimal_count = 4
-        elif number > 100.0:
+        elif abs_num > 100.0:
             decimal_count = 3
-        elif number > 10.0:
+        elif abs_num > 10.0:
             decimal_count = 2
-        elif number > 1.0:
+        elif abs_num > 1.0:
             decimal_count = 1
         else:
             decimal_count = -1
 
     else:
-        decimal_count = count_zeros(str_num)
+        decimal_count = count_zeros(str(abs_num))
 
+    str_num = str(number)
     if str_num[0] == "-":
         if "e" in str_num:
             if str_num[-1] == "5":
@@ -157,6 +215,8 @@ def get_cp_diff_category(number: float):
                     return DecimalCategory.PR_THREE
                 elif decimal_count == 4:
                     return DecimalCategory.PR_FOUR
+                else:
+                    return DecimalCategory.UNKNOWN
 
 
 def count_zeros(str_num: str):
@@ -164,6 +224,8 @@ def count_zeros(str_num: str):
     for s in str_num:
         if s == "0":
             zero_count += 1
+        elif s == ".":
+            continue
         else:
             break
     return zero_count
@@ -173,7 +235,11 @@ def get_nearest_weights(number: float, coin_price_weights: dict) -> list:
     cp_key_values = [key for key in coin_price_weights.keys()]
     nearest_weights = []
 
-    for i in range(VALUE_GROUP_COUNT):
+    global USED_GROUP_COUNT
+    if WANTED_GROUP_COUNT > len(cp_key_values):
+        USED_GROUP_COUNT = len(cp_key_values)
+
+    for i in range(USED_GROUP_COUNT):
         nearest_value = get_nearest_value(number, cp_key_values)
         cp_key_values.remove(nearest_value)
         nearest_weights.append(coin_price_weights[nearest_value])
@@ -196,9 +262,25 @@ def get_nearest_value(number: float, values: list) -> float:
         return before
 
 
-def weight_fluctuation(coin_weight: dict):
-    cp_category: DecimalCategory = coin_weight.get("CP Difference Category")
-    cp_category_identifier = cp_category.value[0]
+def get_recent_weights(coin_price_weights: dict) -> list:
+    cp_key_values = [key for key in coin_price_weights.keys()]
+    recent_weights = []
+
+    global USED_RECENT_COUNT
+    if WANTED_RECENT_COUNT > len(cp_key_values):
+        USED_RECENT_COUNT = len(cp_key_values)
+
+    cp_key_values.reverse()
+    for i in range(1, USED_RECENT_COUNT):
+        recent_value = cp_key_values[i]
+        cp_key_values.remove(recent_value)
+        recent_weights.append(coin_price_weights[recent_value])
+
+    return recent_weights
+
+
+def weight_fluctuation(cp_diff_category):
+    cp_category_identifier = cp_diff_category.value[0]
     if cp_category_identifier == "p":
         return CPFluctuation.INCREASE
     elif cp_category_identifier == "n":
@@ -207,6 +289,71 @@ def weight_fluctuation(coin_weight: dict):
         return CPFluctuation.SAME
     else:
         return CPFluctuation.UNKNOWN
+
+
+def get_highest_cp_fluctuation(cp_fluctuation_weights: dict):
+    cp_fluctuation_inc = cp_fluctuation_weights[CPFluctuation.INCREASE]
+    cp_fluctuation_dec = cp_fluctuation_weights[CPFluctuation.DECREASE]
+    cp_fluctuation_same = cp_fluctuation_weights[CPFluctuation.SAME]
+    cp_fluctuation_unknown = cp_fluctuation_weights[CPFluctuation.UNKNOWN]
+    highest_cp_fluctuation = CPFluctuation.UNKNOWN
+
+    if cp_fluctuation_inc > cp_fluctuation_dec:
+        if cp_fluctuation_inc > cp_fluctuation_same:
+            if cp_fluctuation_inc > cp_fluctuation_unknown:
+                highest_cp_fluctuation = CPFluctuation.INCREASE
+        else:
+            if cp_fluctuation_same > cp_fluctuation_unknown:
+                highest_cp_fluctuation = CPFluctuation.SAME
+    else:
+        if cp_fluctuation_dec > cp_fluctuation_same:
+            if cp_fluctuation_dec > cp_fluctuation_unknown:
+                highest_cp_fluctuation = CPFluctuation.DECREASE
+        else:
+            if cp_fluctuation_same > cp_fluctuation_unknown:
+                highest_cp_fluctuation = CPFluctuation.SAME
+
+    return highest_cp_fluctuation
+
+
+def get_nearest_weights_difference_values(
+        nearest_weights: list,
+        highest_cp_fluctuation
+) -> list:
+    nearest_weight_difference_values = []
+
+    for weight in nearest_weights:
+        if weight["CP Fluctuation"] == highest_cp_fluctuation:
+            nearest_weight_difference_values.append(weight["CP Difference"])
+
+    return nearest_weight_difference_values
+
+
+def get_recent_weights_difference_values(
+        recent_weights: list,
+        highest_cp_fluctuation
+) -> list:
+    recent_weights_difference_values = []
+
+    for weight in recent_weights:
+        if weight["CP Fluctuation"] == highest_cp_fluctuation:
+            recent_weights_difference_values.append(weight["CP Difference"])
+
+    return recent_weights_difference_values
+
+
+def get_price_prediction(
+        most_recent_price: float,
+        nearest_weights_differences: list,
+        recent_weights_differences: list,
+        highest_cp_fluctuation_value: int
+) -> float:
+    cp_fluctuation_influence = highest_cp_fluctuation_value / USED_GROUP_COUNT
+    combined_weight_class_differences = nearest_weights_differences + recent_weights_differences
+    combined_weight_class_differences.sort()
+    combined_weight_class_differences_use_index = round(len(combined_weight_class_differences) * cp_fluctuation_influence)
+    cp_price_change_prediction = combined_weight_class_differences[combined_weight_class_differences_use_index]
+    return most_recent_price + cp_price_change_prediction
 
 
 class DecimalCategory(Enum):
