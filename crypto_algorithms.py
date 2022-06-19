@@ -30,7 +30,7 @@ def predict_next_hour(
         coin_prices: list,
         use_patterning: bool = False
 ) -> float:
-    log("predict_next_hour_weights_method", "Working on creating prediction for new hour")
+    log("predict_next_hour", "Working on creating prediction for new hour")
     cp_decimal_weights = {
         DecimalCategory.PL_FIVE: 0, DecimalCategory.PL_FOUR: 0, DecimalCategory.PL_THREE: 0,
         DecimalCategory.PL_TWO: 0, DecimalCategory.PL_ONE: 0, DecimalCategory.NL_FIVE: 0,
