@@ -1,6 +1,6 @@
 from enum import Enum
 from bisect import bisect_left
-from utils import adjust_hours_and_format_datetime, log
+from utils import adjust_hours_and_format_datetime, sort_dict, get_random_number, log
 
 RELATIVE_MARGINS_RIGHT = {
     "LUNC": 0.000001,
@@ -14,18 +14,22 @@ USED_RECENT_COUNT = 200
 
 def run_predictions(coin_abbreviation: str, coin_prices: list, predict_future_hours: int, most_recent_time):
     print("Working on creating predictions for the next {0} hour(s)".format(predict_future_hours))
-    hour_prediction = predict_next_hour_weights_method(coin_abbreviation, coin_prices)
-    hour_prediction_pattern = predict_next_hour_pattern_method(coin_prices)
+    hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
+    hour_prediction_pattern = predict_next_hour(coin_abbreviation, coin_prices, True)
     print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction))
     print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction_pattern))
     for i in range(1, predict_future_hours):
         coin_prices.append(hour_prediction)
-        hour_prediction = predict_next_hour_weights_method(coin_abbreviation, coin_prices)
+        hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
         adjusted_hour = adjust_hours_and_format_datetime(most_recent_time, i + 1)
         print("Datetime {0} prediction: {1:.8f}".format(adjusted_hour, hour_prediction))
 
 
-def predict_next_hour_weights_method(coin_abbreviation: str, coin_prices: list) -> float:
+def predict_next_hour(
+        coin_abbreviation: str,
+        coin_prices: list,
+        use_patterning: bool = False
+) -> float:
     log("predict_next_hour_weights_method", "Working on creating prediction for new hour")
     cp_decimal_weights = {
         DecimalCategory.PL_FIVE: 0, DecimalCategory.PL_FOUR: 0, DecimalCategory.PL_THREE: 0,
@@ -62,56 +66,71 @@ def predict_next_hour_weights_method(coin_abbreviation: str, coin_prices: list) 
         }
         coin_price_weights[cp_now] = cp_dict
 
-    # print(cp_decimal_weights)
-    # print(coin_price_weights)
-    # print(cp_fluctuation_weights)
-
     most_recent_price = coin_prices[-1]
-    # print(most_recent_price)
 
     nearest_weights = get_nearest_weights(most_recent_price, coin_price_weights)
-    # print(nearest_weights)
     recent_weights = get_recent_weights(coin_price_weights)
-    # print(recent_weights)
 
     nearest_and_recent_weights = nearest_weights + recent_weights
-    for weight in nearest_and_recent_weights:
-        # print("weight: {0}".format(weight))
-        cp_fluctuation = weight["CP Fluctuation"]
-        cp_fluctuation_value = cp_fluctuation_weights.get(cp_fluctuation)
-        cp_fluctuation_weights[cp_fluctuation] = cp_fluctuation_value + 1
+    if not use_patterning:
+        for weight in nearest_and_recent_weights:
+            # print("weight: {0}".format(weight))
+            cp_fluctuation = weight["CP Fluctuation"]
+            cp_fluctuation_value = cp_fluctuation_weights.get(cp_fluctuation)
+            cp_fluctuation_weights[cp_fluctuation] = cp_fluctuation_value + 1
 
-    highest_cp_fluctuation = get_highest_cp_fluctuation(cp_fluctuation_weights)
+        highest_cp_fluctuation = get_highest_cp_fluctuation(cp_fluctuation_weights)
 
-    nearest_weights_difference_values = get_nearest_weights_difference_values(
-        nearest_weights,
-        highest_cp_fluctuation
-    )
-    # print(nearest_weights_difference_values)
+        nearest_weights_difference_values = get_nearest_weights_difference_values(
+            nearest_weights,
+            highest_cp_fluctuation
+        )
 
-    recent_weights_difference_values = get_recent_weights_difference_values(
-        nearest_weights,
-        highest_cp_fluctuation
-    )
-    # print(recent_weights_difference_values)
+        recent_weights_difference_values = get_recent_weights_difference_values(
+            nearest_weights,
+            highest_cp_fluctuation
+        )
 
-    price_prediction = get_price_prediction(
-        most_recent_price,
-        nearest_weights_difference_values,
-        recent_weights_difference_values,
-        len(nearest_weights_difference_values)
-    )
+        price_prediction = get_price_prediction(
+            most_recent_price,
+            nearest_weights_difference_values,
+            recent_weights_difference_values,
+            len(nearest_weights_difference_values)
+        )
 
-    # print(most_recent_price)
-    # print(price_prediction)
-    # print("{0:.8f}".format(most_recent_price))
-    # print("{0:.8f}".format(price_prediction))
+        # print("{0:.8f}".format(most_recent_price))
+        # print("{0:.8f}".format(price_prediction))
 
-    return price_prediction
+        return price_prediction
+
+    else:
+        # Use patterning
+        most_likely_fluctuation = get_fluctuation_from_pattern(coin_prices)
+
+        nearest_weights_difference_values = get_nearest_weights_difference_values(
+            nearest_weights,
+            most_likely_fluctuation
+        )
+
+        recent_weights_difference_values = get_recent_weights_difference_values(
+            nearest_weights,
+            most_likely_fluctuation
+        )
+
+        price_prediction = get_price_prediction(
+            most_recent_price,
+            nearest_weights_difference_values,
+            recent_weights_difference_values,
+            len(nearest_weights_difference_values)
+        )
+
+        # print("{0:.8f}".format(most_recent_price))
+        # print("{0:.8f}".format(price_prediction))
+
+        return price_prediction
 
 
-def predict_next_hour_pattern_method(coin_prices: list) -> float:
-    log("predict_next_hour_pattern_method", "Working on creating prediction for new hour")
+def get_fluctuation_from_pattern(coin_prices: list):
     cps_fluctuation = []
     for i in range(len(coin_prices) - 1):
         cp_now = coin_prices[i]
@@ -119,8 +138,6 @@ def predict_next_hour_pattern_method(coin_prices: list) -> float:
         cp_diff = cp_now - cp_next
         cp_diff_category = get_cp_diff_category(cp_diff)
         cps_fluctuation.append({"CP Difference": cp_diff, "CP Fluctuation": get_diff_fluctuation(cp_diff_category)})
-
-    print(cps_fluctuation)
 
     global USED_RECENT_COUNT
     if WANTED_RECENT_COUNT > len(cps_fluctuation):
@@ -132,46 +149,284 @@ def predict_next_hour_pattern_method(coin_prices: list) -> float:
     longest_decrease_run = 0
     current_same_run = 0
     longest_same_run = 0
+    fluctuation_runs = dict()
 
     for i in range(USED_RECENT_COUNT):
         cp_dict = cps_fluctuation[i]
-        cp_diff = cp_dict.get("CP Difference")
         cp_fluctuation = cp_dict.get("CP Fluctuation")
 
         if cp_fluctuation is CPFluctuation.INCREASE:
             current_increase_run += 1
-            if current_decrease_run > longest_decrease_run:
-                longest_decrease_run = current_decrease_run
+            if current_decrease_run > 0:
+                decrease_run_value = fluctuation_runs.get("d{0}".format(current_decrease_run))
+                if decrease_run_value is None:
+                    fluctuation_runs["d{0}".format(current_decrease_run)] = 1
+                else:
+                    fluctuation_runs["d{0}".format(current_decrease_run)] = decrease_run_value + 1
+                if current_decrease_run > longest_decrease_run:
+                    longest_decrease_run = current_decrease_run
                 current_decrease_run = 0
-            if current_same_run > longest_same_run:
-                longest_same_run = current_same_run
+            if current_same_run > 0:
+                same_run_value = fluctuation_runs.get("d{0}".format(current_same_run))
+                if same_run_value is None:
+                    fluctuation_runs["d{0}".format(current_same_run)] = 1
+                else:
+                    fluctuation_runs["d{0}".format(current_same_run)] = same_run_value + 1
+                if current_same_run > longest_same_run:
+                    longest_same_run = current_same_run
                 current_same_run = 0
 
         elif cp_fluctuation is CPFluctuation.DECREASE:
             current_decrease_run += 1
-            if current_increase_run > longest_increase_run:
-                longest_increase_run = current_increase_run
+            if current_increase_run > 0:
+                increase_run_value = fluctuation_runs.get("i{0}".format(current_increase_run))
+                if increase_run_value is None:
+                    fluctuation_runs["i{0}".format(current_increase_run)] = 1
+                else:
+                    fluctuation_runs["i{0}".format(current_increase_run)] = increase_run_value + 1
+                if current_increase_run > longest_increase_run:
+                    longest_increase_run = current_increase_run
                 current_increase_run = 0
-            if current_same_run > longest_same_run:
-                longest_same_run = current_same_run
+            if current_same_run > 0:
+                same_run_value = fluctuation_runs.get("d{0}".format(current_same_run))
+                if same_run_value is None:
+                    fluctuation_runs["d{0}".format(current_same_run)] = 1
+                else:
+                    fluctuation_runs["d{0}".format(current_same_run)] = same_run_value + 1
+                if current_same_run > longest_same_run:
+                    longest_same_run = current_same_run
                 current_same_run = 0
 
         elif cp_fluctuation is CPFluctuation.SAME:
             current_same_run += 1
-            if current_increase_run > longest_increase_run:
-                longest_increase_run = current_increase_run
+            if current_increase_run > 0:
+                increase_run_value = fluctuation_runs.get("i{0}".format(current_increase_run))
+                if increase_run_value is None:
+                    fluctuation_runs["i{0}".format(current_increase_run)] = 1
+                else:
+                    fluctuation_runs["i{0}".format(current_increase_run)] = increase_run_value + 1
+                if current_increase_run > longest_increase_run:
+                    longest_increase_run = current_increase_run
                 current_increase_run = 0
-            if current_decrease_run > longest_decrease_run:
-                longest_decrease_run = current_decrease_run
+            if current_decrease_run > 0:
+                decrease_run_value = fluctuation_runs.get("d{0}".format(current_decrease_run))
+                if decrease_run_value is None:
+                    fluctuation_runs["d{0}".format(current_decrease_run)] = 1
+                else:
+                    fluctuation_runs["d{0}".format(current_decrease_run)] = decrease_run_value + 1
+                if current_decrease_run > longest_decrease_run:
+                    longest_decrease_run = current_decrease_run
                 current_decrease_run = 0
 
-    # TODO Create a dict tracking each run and how many times each run occurs
-    # TODO Based on current run, based on the groupings of the previous fluctuations, determine best run
-    # TODO Based on the best run selection, choose increase, decrease or same
-    # TODO Based on the fluctuation option, use the methodology applied in predict_next_hour_weight_method
-    # TODO Using the above methodology, get the nearest and recent groups to determine best value to apply for the fluctuation option
+    fluctuation_runs = sort_dict(fluctuation_runs)
 
-    return 0.0
+    increase_runs_total = 0
+    decrease_runs_total = 0
+    same_runs_total = 0
+    for key in fluctuation_runs.keys():
+        if key[0] == "i":
+            increase_runs_total += fluctuation_runs.get(key)
+        if key[0] == "d":
+            decrease_runs_total += fluctuation_runs.get(key)
+        if key[0] == "s":
+            same_runs_total += fluctuation_runs.get(key)
+    # runs_total = increase_runs_total + decrease_runs_total + same_runs_total
+
+    random_fluctuation_value = get_random_number(0, 100)
+    increase_fluctuation_chance = get_fluctuation_chance(
+        fluctuation_runs,
+        current_increase_run,
+        increase_runs_total,
+        current_decrease_run,
+        decrease_runs_total,
+        current_same_run,
+        same_runs_total
+    )
+    decrease_fluctuation_chance = get_fluctuation_chance(
+        fluctuation_runs,
+        current_decrease_run,
+        decrease_runs_total,
+        current_increase_run,
+        increase_runs_total,
+        current_same_run,
+        same_runs_total
+    )
+    same_fluctuation_chance = get_fluctuation_chance(
+        fluctuation_runs,
+        current_same_run,
+        same_runs_total,
+        current_increase_run,
+        increase_runs_total,
+        current_decrease_run,
+        decrease_runs_total
+    )
+
+    increase_fluctuation_zone = increase_fluctuation_chance
+    decrease_fluctuation_zone = increase_fluctuation_zone + decrease_fluctuation_chance
+    same_fluctuation_zone = decrease_fluctuation_zone + same_fluctuation_chance
+
+    if random_fluctuation_value <= increase_fluctuation_zone:
+        return CPFluctuation.INCREASE
+    elif random_fluctuation_value <= decrease_fluctuation_zone:
+        return CPFluctuation.DECREASE
+    elif random_fluctuation_value <= same_fluctuation_zone:
+        return CPFluctuation.SAME
+    else:
+        return CPFluctuation.UNKNOWN
+
+
+def get_fluctuation_chance(
+        fluctuation_runs: dict,
+        current_run: int,
+        run_type_runs_total: int,
+        alternate_one_current_run: int,
+        alternate_one_runs_total: int,
+        alternate_two_current_run: int,
+        alternate_two_runs_total: int
+) -> int:
+    possible_run_alternate_one_paths = get_possible_run_paths(
+        fluctuation_runs, alternate_one_current_run, alternate_one_runs_total
+    )
+    possible_run_alternate_two_paths = get_possible_run_paths(
+        fluctuation_runs, alternate_two_current_run, alternate_two_runs_total
+    )
+    possible_other_run_paths = possible_run_alternate_one_paths + possible_run_alternate_two_paths
+    possible_type_run_run_paths = get_possible_run_paths(fluctuation_runs, current_run, run_type_runs_total)
+    possible_run_paths = possible_other_run_paths + possible_type_run_run_paths
+    fluctuation_chance = round((possible_type_run_run_paths / possible_run_paths) * 100)
+    return fluctuation_chance
+
+
+def get_possible_run_paths(fluctuation_runs: dict, current_run: int, run_type_runs_total: int) -> int:
+    current_run_total = 0
+    for i in range(1, current_run + 1):
+        current_run_total += fluctuation_runs.get("i{0}".format(i))
+    return run_type_runs_total - current_run_total
+
+
+# def predict_next_hour_pattern_method(coin_prices: list) -> float:
+#     log("predict_next_hour_pattern_method", "Working on creating prediction for new hour")
+#     cp_decimal_weights = {
+#         DecimalCategory.PL_FIVE: 0, DecimalCategory.PL_FOUR: 0, DecimalCategory.PL_THREE: 0,
+#         DecimalCategory.PL_TWO: 0, DecimalCategory.PL_ONE: 0, DecimalCategory.NL_FIVE: 0,
+#         DecimalCategory.NL_FOUR: 0, DecimalCategory.NL_THREE: 0, DecimalCategory.NL_TWO: 0,
+#         DecimalCategory.NL_ONE: 0, DecimalCategory.ZERO: 0, DecimalCategory.PR_ONE: 0,
+#         DecimalCategory.PR_TWO: 0, DecimalCategory.PR_THREE: 0, DecimalCategory.PR_FOUR: 0,
+#         DecimalCategory.PR_FIVE: 0, DecimalCategory.PR_SIX: 0, DecimalCategory.PR_SEVEN: 0,
+#         DecimalCategory.PR_EIGHT: 0, DecimalCategory.PR_NINE: 0, DecimalCategory.NR_ONE: 0,
+#         DecimalCategory.NR_TWO: 0, DecimalCategory.NR_THREE: 0, DecimalCategory.NR_FOUR: 0,
+#         DecimalCategory.NR_FIVE: 0, DecimalCategory.NR_SIX: 0, DecimalCategory.NR_SEVEN: 0,
+#         DecimalCategory.NR_EIGHT: 0, DecimalCategory.NR_NINE: 0
+#     }
+#     cps_fluctuation = []
+#     for i in range(len(coin_prices) - 1):
+#         cp_now = coin_prices[i]
+#         cp_next = coin_prices[i + 1]
+#         cp_diff = cp_now - cp_next
+#         cp_diff_category = get_cp_diff_category(cp_diff)
+#         cp_diff_category_value = cp_decimal_weights.get(cp_diff_category)
+#         cp_decimal_weights[cp_diff_category] = cp_diff_category_value + 1
+#         cps_fluctuation.append({"CP Difference": cp_diff, "CP Fluctuation": get_diff_fluctuation(cp_diff_category)})
+#
+#     print(cps_fluctuation)
+#
+#     global USED_RECENT_COUNT
+#     if WANTED_RECENT_COUNT > len(cps_fluctuation):
+#         USED_RECENT_COUNT = len(cps_fluctuation)
+#
+#     current_increase_run = 0
+#     longest_increase_run = 0
+#     current_decrease_run = 0
+#     longest_decrease_run = 0
+#     current_same_run = 0
+#     longest_same_run = 0
+#     fluctuation_runs = dict()
+#
+#     for i in range(USED_RECENT_COUNT):
+#         cp_dict = cps_fluctuation[i]
+#         cp_diff = cp_dict.get("CP Difference")
+#         cp_fluctuation = cp_dict.get("CP Fluctuation")
+#
+#         if cp_fluctuation is CPFluctuation.INCREASE:
+#             current_increase_run += 1
+#             if current_decrease_run > 0:
+#                 decrease_run_value = fluctuation_runs.get("d{0}".format(current_decrease_run))
+#                 if decrease_run_value is None:
+#                     fluctuation_runs["d{0}".format(current_decrease_run)] = 1
+#                 else:
+#                     fluctuation_runs["d{0}".format(current_decrease_run)] = decrease_run_value + 1
+#                 if current_decrease_run > longest_decrease_run:
+#                     longest_decrease_run = current_decrease_run
+#                 current_decrease_run = 0
+#             if current_same_run > 0:
+#                 same_run_value = fluctuation_runs.get("d{0}".format(current_same_run))
+#                 if same_run_value is None:
+#                     fluctuation_runs["d{0}".format(current_same_run)] = 1
+#                 else:
+#                     fluctuation_runs["d{0}".format(current_same_run)] = same_run_value + 1
+#                 if current_same_run > longest_same_run:
+#                     longest_same_run = current_same_run
+#                 current_same_run = 0
+#
+#         elif cp_fluctuation is CPFluctuation.DECREASE:
+#             current_decrease_run += 1
+#             if current_increase_run > 0:
+#                 increase_run_value = fluctuation_runs.get("i{0}".format(current_increase_run))
+#                 if increase_run_value is None:
+#                     fluctuation_runs["i{0}".format(current_increase_run)] = 1
+#                 else:
+#                     fluctuation_runs["i{0}".format(current_increase_run)] = increase_run_value + 1
+#                 if current_increase_run > longest_increase_run:
+#                     longest_increase_run = current_increase_run
+#                 current_increase_run = 0
+#             if current_same_run > 0:
+#                 same_run_value = fluctuation_runs.get("d{0}".format(current_same_run))
+#                 if same_run_value is None:
+#                     fluctuation_runs["d{0}".format(current_same_run)] = 1
+#                 else:
+#                     fluctuation_runs["d{0}".format(current_same_run)] = same_run_value + 1
+#                 if current_same_run > longest_same_run:
+#                     longest_same_run = current_same_run
+#                 current_same_run = 0
+#
+#         elif cp_fluctuation is CPFluctuation.SAME:
+#             current_same_run += 1
+#             if current_increase_run > 0:
+#                 increase_run_value = fluctuation_runs.get("i{0}".format(current_increase_run))
+#                 if increase_run_value is None:
+#                     fluctuation_runs["i{0}".format(current_increase_run)] = 1
+#                 else:
+#                     fluctuation_runs["i{0}".format(current_increase_run)] = increase_run_value + 1
+#                 if current_increase_run > longest_increase_run:
+#                     longest_increase_run = current_increase_run
+#                 current_increase_run = 0
+#             if current_decrease_run > 0:
+#                 decrease_run_value = fluctuation_runs.get("d{0}".format(current_decrease_run))
+#                 if decrease_run_value is None:
+#                     fluctuation_runs["d{0}".format(current_decrease_run)] = 1
+#                 else:
+#                     fluctuation_runs["d{0}".format(current_decrease_run)] = decrease_run_value + 1
+#                 if current_decrease_run > longest_decrease_run:
+#                     longest_decrease_run = current_decrease_run
+#                 current_decrease_run = 0
+#
+#     print(longest_increase_run)
+#     print(longest_decrease_run)
+#     print(longest_same_run)
+#     print(fluctuation_runs)
+#     fluctuation_runs = sort_dict(fluctuation_runs)
+#     print(fluctuation_runs)
+#     print(current_increase_run)
+#     print(current_decrease_run)
+#     print(current_same_run)
+#
+#     # TODO Create a dict tracking each run and how many times each run occurs
+#     # TODO Based on current run, based on the groupings of the previous fluctuations, determine best run
+#     # TODO Based on the best run selection, choose increase, decrease or same
+#     # TODO Based on the fluctuation option, use the methodology applied in predict_next_hour_weight_method
+#     # TODO Using the above methodology, get the nearest and recent groups to determine best value to apply for the fluctuation option
+#
+#     return 0.0
 
 
 def get_cp_diff_category(number: float):
@@ -378,12 +633,12 @@ def get_highest_cp_fluctuation(cp_fluctuation_weights: dict):
 
 def get_nearest_weights_difference_values(
         nearest_weights: list,
-        highest_cp_fluctuation
+        cp_fluctuation
 ) -> list:
     nearest_weight_difference_values = []
 
     for weight in nearest_weights:
-        if weight["CP Fluctuation"] == highest_cp_fluctuation:
+        if weight["CP Fluctuation"] == cp_fluctuation:
             nearest_weight_difference_values.append(weight["CP Difference"])
 
     return nearest_weight_difference_values
@@ -391,12 +646,12 @@ def get_nearest_weights_difference_values(
 
 def get_recent_weights_difference_values(
         recent_weights: list,
-        highest_cp_fluctuation
+        cp_fluctuation
 ) -> list:
     recent_weights_difference_values = []
 
     for weight in recent_weights:
-        if weight["CP Fluctuation"] == highest_cp_fluctuation:
+        if weight["CP Fluctuation"] == cp_fluctuation:
             recent_weights_difference_values.append(weight["CP Difference"])
 
     return recent_weights_difference_values

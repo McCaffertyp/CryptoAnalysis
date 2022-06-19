@@ -4,7 +4,7 @@ import requests
 import pandas as pd
 import datetime as dt
 from crypto_algorithms import run_predictions
-from utils import adjust_year_and_format_datetime
+from utils import adjust_year_and_format_datetime, adjust_months_and_format_datetime
 
 API_KEY = "C83FD246-BBED-4D3D-8A94-C3190A1371C5"
 READ_FROM_CSV = True
@@ -41,8 +41,10 @@ def run():
         # Supported periods: https://docs.coinapi.io/#list-all-periods-get
         period_timing = "1HRS"
         today = dt.datetime.now()
-        datetime_start = adjust_year_and_format_datetime(today, 1)
-        datetime_end = adjust_year_and_format_datetime(today, 0)
+        # datetime_start = adjust_year_and_format_datetime(today, 1)
+        # datetime_end = adjust_year_and_format_datetime(today, 0)
+        datetime_start = adjust_months_and_format_datetime(today, 6)
+        datetime_end = adjust_months_and_format_datetime(today, 0)
         limit = "100000"
         url = "https://rest.coinapi.io/v1/ohlcv/{0}/USD/history?period_id={1}&time_start={2}&time_end={3}&limit={4}".format(
             coin_abbreviation, period_timing, datetime_start, datetime_end, limit
