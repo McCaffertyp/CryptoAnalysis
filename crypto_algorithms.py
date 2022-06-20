@@ -17,12 +17,16 @@ def run_predictions(coin_abbreviation: str, coin_prices: list, predict_future_ho
     hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
     hour_prediction_pattern = predict_next_hour(coin_abbreviation, coin_prices, True)
     print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction))
-    print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction_pattern))
+    print("Datetime {0} patterning prediction: {1:.8f}".format(adjust_hours_and_format_datetime(most_recent_time, 1), hour_prediction_pattern))
+    coin_prices_clone = coin_prices
     for i in range(1, predict_future_hours):
         coin_prices.append(hour_prediction)
+        coin_prices_clone.append(hour_prediction_pattern)
         hour_prediction = predict_next_hour(coin_abbreviation, coin_prices)
+        hour_prediction_pattern = predict_next_hour(coin_abbreviation, coin_prices_clone, True)
         adjusted_hour = adjust_hours_and_format_datetime(most_recent_time, i + 1)
         print("Datetime {0} prediction: {1:.8f}".format(adjusted_hour, hour_prediction))
+        print("Datetime {0} patterning prediction: {1:.8f}".format(adjusted_hour, hour_prediction_pattern))
 
 
 def predict_next_hour(
@@ -30,7 +34,7 @@ def predict_next_hour(
         coin_prices: list,
         use_patterning: bool = False
 ) -> float:
-    log("predict_next_hour", "Working on creating prediction for new hour")
+    # log("predict_next_hour", "Working on creating prediction for new hour")
     cp_decimal_weights = {
         DecimalCategory.PL_FIVE: 0, DecimalCategory.PL_FOUR: 0, DecimalCategory.PL_THREE: 0,
         DecimalCategory.PL_TWO: 0, DecimalCategory.PL_ONE: 0, DecimalCategory.NL_FIVE: 0,
@@ -131,6 +135,7 @@ def predict_next_hour(
 
 
 def get_fluctuation_from_pattern(coin_prices: list):
+    print(coin_prices[-1])
     cps_fluctuation = []
     for i in range(len(coin_prices) - 1):
         cp_now = coin_prices[i]
@@ -264,6 +269,8 @@ def get_fluctuation_from_pattern(coin_prices: list):
     increase_fluctuation_zone = increase_fluctuation_chance
     decrease_fluctuation_zone = increase_fluctuation_zone + decrease_fluctuation_chance
     same_fluctuation_zone = decrease_fluctuation_zone + same_fluctuation_chance
+
+    print(increase_fluctuation_zone, decrease_fluctuation_zone, same_fluctuation_zone)
 
     if random_fluctuation_value <= increase_fluctuation_zone:
         return CPFluctuation.INCREASE

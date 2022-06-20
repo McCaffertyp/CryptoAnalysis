@@ -1,5 +1,6 @@
 import sys
 import json
+import time
 import requests
 import pandas as pd
 import datetime as dt
@@ -14,7 +15,9 @@ WRITE_TO_CSV = True
 def run():
     print("Starting crypto algorithm...")
     coin_abbreviation: str = sys.argv[1]
-    csv_file_name = "{0} History.csv".format(coin_abbreviation)
+    # Supported periods: https://docs.coinapi.io/#timeseries-periods-get
+    period_timing = "1HRS"
+    csv_file_name = "{0} {1} History.csv".format(coin_abbreviation, period_timing)
     try:
         predict_hours_in_advance = int(sys.argv[2])
     except IndexError as error:
@@ -38,8 +41,6 @@ def run():
         run_predictions(coin_abbreviation, coin_prices_open, predict_hours_in_advance, most_recent_time)
 
     else:
-        # Supported periods: https://docs.coinapi.io/#list-all-periods-get
-        period_timing = "1HRS"
         today = dt.datetime.now()
         # datetime_start = adjust_year_and_format_datetime(today, 1)
         # datetime_end = adjust_year_and_format_datetime(today, 0)
@@ -51,7 +52,17 @@ def run():
         )
         print(url)
         headers = {"X-CoinAPI-Key": API_KEY}
-        response = requests.get(url, headers=headers)
+        response = None
+        for i in range(5):
+            try:
+                response = requests.get(url, headers=headers)
+                break
+            except Exception as error:
+                time.sleep(1)
+
+        if response is None:
+            print("Unable to process request")
+            exit()
 
         if response.status_code == 429:
             # API response

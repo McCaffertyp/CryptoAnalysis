@@ -15,7 +15,7 @@ def adjust_year_and_format_datetime(date: datetime, years_adjust: int) -> str:
 
 
 def adjust_months_and_format_datetime(date: datetime, months_adjust: int) -> str:
-    year = date.year
+    year = (date - relativedelta(months=months_adjust)).year
     month = (date - relativedelta(months=months_adjust)).month
     day = date.day
     hour = date.hour
@@ -29,8 +29,8 @@ def adjust_hours_and_format_datetime(date_str: str, hours_adjust: int) -> str:
     date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
     year = date.year
     month = date.month
-    day = date.day
-    hour = int(date.hour) + hours_adjust
+    day = (date + relativedelta(hours=hours_adjust)).day
+    hour = (date + relativedelta(hours=hours_adjust)).hour
     minute = date.minute
     second = date.second
 
