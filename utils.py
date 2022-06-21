@@ -3,6 +3,10 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 
+def now() -> datetime:
+    return datetime.now()
+
+
 def adjust_year_and_format_datetime(date: datetime, years_adjust: int) -> str:
     year = (date - relativedelta(years=years_adjust)).year
     month = date.month
@@ -25,12 +29,16 @@ def adjust_months_and_format_datetime(date: datetime, months_adjust: int) -> str
     return format_date(year, month, day, hour, minute, second)
 
 
-def adjust_hours_and_format_datetime(date_str: str, hours_adjust: int) -> str:
+def adjust_hours_and_format_datetime(date_str: str, hours_adjust: int, forward: bool = True) -> str:
     date = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
     year = date.year
     month = date.month
     day = (date + relativedelta(hours=hours_adjust)).day
+    if not forward:
+        day = (date - relativedelta(hours=hours_adjust)).day
     hour = (date + relativedelta(hours=hours_adjust)).hour
+    if not forward:
+        hour = (date - relativedelta(hours=hours_adjust)).hour
     minute = date.minute
     second = date.second
 
@@ -49,7 +57,7 @@ def format_date(year, month, day, hour, minute, second) -> str:
     if second < 10:
         second = "0{0}".format(second)
 
-    return "{0}-{1}-{2}T{3}:{4}:{5}".format(year, month, day, hour, minute, second)
+    return "{0}-{1}-{2} {3}:{4}:{5}".format(year, month, day, hour, minute, second)
 
 
 def get_random_number(low: int, high: int, include_high: bool = True) -> int:
