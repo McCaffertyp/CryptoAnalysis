@@ -57,7 +57,7 @@ def format_date(year, month, day, hour, minute, second) -> str:
     if second < 10:
         second = "0{0}".format(second)
 
-    return "{0}-{1}-{2} {3}:{4}:{5}".format(year, month, day, hour, minute, second)
+    return "{0}-{1}-{2}T{3}:{4}:{5}".format(year, month, day, hour, minute, second)
 
 
 def get_random_number(low: int, high: int, include_high: bool = True) -> int:

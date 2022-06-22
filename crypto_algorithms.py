@@ -29,18 +29,18 @@ def run_predictions(coin_abbreviation: str, coin_prices: list, predict_future_ho
     if USE_BACKTRACK:
         cp_recent_time = adjust_hours_and_format_datetime(cp_recent_time, DATA_POINT_BACKTRACK, False)
         cp_data_points = cp_data_points[:(len(cp_data_points) - DATA_POINT_BACKTRACK)]
-    hour_prediction = predict_next_hour(coin_abbreviation, cp_data_points)
+    # hour_prediction = predict_next_hour(coin_abbreviation, cp_data_points)
     hour_prediction_pattern = predict_next_hour(coin_abbreviation, cp_data_points, True)
-    print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(cp_recent_time, 1), hour_prediction))
+    # print("Datetime {0} prediction: {1:.8f}".format(adjust_hours_and_format_datetime(cp_recent_time, 1), hour_prediction))
     print("Datetime {0} patterning prediction: {1:.8f}\n".format(adjust_hours_and_format_datetime(cp_recent_time, 1), hour_prediction_pattern))
     cp_data_points_clone = cp_data_points.copy()
     for i in range(1, predict_future_hours):
-        cp_data_points.append(hour_prediction)
+        # cp_data_points.append(hour_prediction)
         cp_data_points_clone.append(hour_prediction_pattern)
-        hour_prediction = predict_next_hour(coin_abbreviation, cp_data_points)
+        # hour_prediction = predict_next_hour(coin_abbreviation, cp_data_points)
         hour_prediction_pattern = predict_next_hour(coin_abbreviation, cp_data_points_clone, True)
         adjusted_hour = adjust_hours_and_format_datetime(cp_recent_time, i + 1)
-        print("Datetime {0} prediction: {1:.8f}".format(adjusted_hour, hour_prediction))
+        # print("Datetime {0} prediction: {1:.8f}".format(adjusted_hour, hour_prediction))
         print("Datetime {0} patterning prediction: {1:.8f}\n".format(adjusted_hour, hour_prediction_pattern))
 
 
@@ -86,6 +86,8 @@ def predict_next_hour(
         coin_price_weights[cp_now] = cp_dict
 
     most_recent_price = coin_prices[-1]
+
+    print("most_recent_price = {0}".format(most_recent_price))
 
     nearest_weights = get_nearest_weights(most_recent_price, coin_price_weights)
     recent_weights = get_recent_weights(coin_price_weights)
@@ -294,6 +296,8 @@ def get_fluctuation_from_pattern(coin_prices: list):
     increase_fluctuation_zone = increase_fluctuation_chance
     decrease_fluctuation_zone = increase_fluctuation_zone + decrease_fluctuation_chance
     same_fluctuation_zone = decrease_fluctuation_zone + same_fluctuation_chance
+
+    print("increase_zone = {0}, decrease_zone = {1}, same_zone = {2}".format(increase_fluctuation_zone, decrease_fluctuation_zone, same_fluctuation_zone))
 
     if random_fluctuation_value <= increase_fluctuation_zone:
         return CPFluctuation.INCREASE
@@ -588,6 +592,7 @@ def get_price_prediction(
     combined_weight_class_differences.sort()
     combined_weight_class_differences_use_index = round(len(combined_weight_class_differences) * cp_fluctuation_influence)
     cp_price_change_prediction = combined_weight_class_differences[combined_weight_class_differences_use_index]
+    print("cp_price_change_prediction = {0}".format(cp_price_change_prediction))
     return most_recent_price + cp_price_change_prediction
 
 

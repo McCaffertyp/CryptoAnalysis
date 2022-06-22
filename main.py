@@ -30,21 +30,24 @@ def run():
         # print(coin_data)
 
         # coin_data.drop(["End Time", "Open Time", "Close Time", "Price Close"], axis="columns", inplace=True)
-        coin_prices_open = [coin_value for coin_value in coin_data["Price Open"].values.tolist()]
+        # coin_prices_open = [coin_value for coin_value in coin_data["Price Open"].values.tolist()]
+        coin_prices_high = [coin_value for coin_value in coin_data["Price High"].values.tolist()]
+        coin_prices_low = [coin_value for coin_value in coin_data["Price Low"].values.tolist()]
+        coin_prices = [((coin_prices_high[i] + coin_prices_low[i]) / 2) for i in range(len(coin_prices_high))]
         most_recent_time: str = coin_data["Start Time"].values.tolist()[-1].split("+")[0]
         # print(coin_prices_open)
 
-        coin_prices_hourly_differences = [coin_prices_open[i] - coin_prices_open[i + 1] for i in range(len(coin_prices_open) - 1)]
+        coin_prices_hourly_differences = [coin_prices[i] - coin_prices[i + 1] for i in range(len(coin_prices) - 1)]
         # print(coin_prices_hourly_differences)
         # print("{0:.8f}".format(coin_prices_hourly_differences[0]))
 
-        run_predictions(coin_abbreviation, coin_prices_open, predict_hours_in_advance, most_recent_time)
+        run_predictions(coin_abbreviation, coin_prices, predict_hours_in_advance, most_recent_time)
 
     else:
         today = dt.datetime.now()
         # datetime_start = adjust_year_and_format_datetime(today, 1)
         # datetime_end = adjust_year_and_format_datetime(today, 0)
-        datetime_start = adjust_months_and_format_datetime(today, 6)
+        datetime_start = adjust_months_and_format_datetime(today, 3)
         datetime_end = adjust_months_and_format_datetime(today, 0)
         limit = "100000"
         url = "https://rest.coinapi.io/v1/ohlcv/{0}/USD/history?period_id={1}&time_start={2}&time_end={3}&limit={4}".format(
