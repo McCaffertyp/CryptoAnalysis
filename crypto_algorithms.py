@@ -297,6 +297,7 @@ def get_fluctuation_from_pattern(coin_prices: list):
     decrease_fluctuation_zone = increase_fluctuation_zone + decrease_fluctuation_chance
     same_fluctuation_zone = decrease_fluctuation_zone + same_fluctuation_chance
 
+    print("increase_chance = {0}, decrease_chance = {1}, same_chance = {2}".format(increase_fluctuation_chance, decrease_fluctuation_chance, same_fluctuation_chance))
     print("increase_zone = {0}, decrease_zone = {1}, same_zone = {2}".format(increase_fluctuation_zone, decrease_fluctuation_zone, same_fluctuation_zone))
 
     if random_fluctuation_value <= increase_fluctuation_zone:
@@ -307,6 +308,15 @@ def get_fluctuation_from_pattern(coin_prices: list):
         return CPFluctuation.SAME
     else:
         return CPFluctuation.UNKNOWN
+
+    # if increase_fluctuation_chance >= decrease_fluctuation_chance and increase_fluctuation_chance >= same_fluctuation_chance:
+    #     return CPFluctuation.INCREASE
+    # elif decrease_fluctuation_chance > increase_fluctuation_chance and decrease_fluctuation_chance > same_fluctuation_chance:
+    #     return CPFluctuation.DECREASE
+    # elif same_fluctuation_chance > increase_fluctuation_chance and same_fluctuation_chance > decrease_fluctuation_chance:
+    #     return CPFluctuation.SAME
+    # else:
+    #     return CPFluctuation.UNKNOWN
 
 
 def get_fluctuation_chance(
