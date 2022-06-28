@@ -87,8 +87,6 @@ def predict_next_hour(
 
     most_recent_price = coin_prices[-1]
 
-    print("most_recent_price = {0}".format(most_recent_price))
-
     nearest_weights = get_nearest_weights(most_recent_price, coin_price_weights)
     recent_weights = get_recent_weights(coin_price_weights)
 
@@ -297,7 +295,7 @@ def get_fluctuation_from_pattern(coin_prices: list):
     decrease_fluctuation_zone = increase_fluctuation_zone + decrease_fluctuation_chance
     same_fluctuation_zone = decrease_fluctuation_zone + same_fluctuation_chance
 
-    print("increase_chance = {0}, decrease_chance = {1}, same_chance = {2}".format(increase_fluctuation_chance, decrease_fluctuation_chance, same_fluctuation_chance))
+    print("increase_chance = {0}%, decrease_chance = {1}%, same_chance = {2}%".format(increase_fluctuation_chance, decrease_fluctuation_chance, same_fluctuation_chance))
     print("increase_zone = {0}, decrease_zone = {1}, same_zone = {2}".format(increase_fluctuation_zone, decrease_fluctuation_zone, same_fluctuation_zone))
 
     if random_fluctuation_value <= increase_fluctuation_zone:
@@ -602,7 +600,6 @@ def get_price_prediction(
     combined_weight_class_differences.sort()
     combined_weight_class_differences_use_index = round(len(combined_weight_class_differences) * cp_fluctuation_influence)
     cp_price_change_prediction = combined_weight_class_differences[combined_weight_class_differences_use_index]
-    print("cp_price_change_prediction = {0}".format(cp_price_change_prediction))
     return most_recent_price + cp_price_change_prediction
 
 

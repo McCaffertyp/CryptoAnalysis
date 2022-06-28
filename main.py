@@ -31,6 +31,7 @@ def run():
 
         # coin_data.drop(["End Time", "Open Time", "Close Time", "Price Close"], axis="columns", inplace=True)
         # coin_prices_open = [coin_value for coin_value in coin_data["Price Open"].values.tolist()]
+        # coin_prices = coin_prices_open.copy()
         coin_prices_high = [coin_value for coin_value in coin_data["Price High"].values.tolist()]
         coin_prices_low = [coin_value for coin_value in coin_data["Price Low"].values.tolist()]
         coin_prices = [((coin_prices_high[i] + coin_prices_low[i]) / 2) for i in range(len(coin_prices_high))]
